@@ -1,6 +1,8 @@
 import streamlit as st
 import sqlite3
 import pandas as pd
+from streamlit_folium import folium_static
+import folium
 DATABASE_FILE = "local_stores.db"
 @st.cache_resource
 def get_db_connection():
@@ -26,15 +28,45 @@ if processed_district:
         stores_data = []
         try:
             cursor = conn.cursor()
-            cursor.execute("SELECT name, category, address, phone, description FROM stores WHERE district = ?", (processed_district,))
+            cursor.execute("SELECT name, category, address, phone, description, latitude, longitude FROM stores WHERE district = ?", (processed_district,))
             stores_data = cursor.fetchall()
         except sqlite3.Error as e:
             st.error(f"상점 정보를 불러오는 중 데이터베이스 오류가 발생했습니다: {e}")
         except Exception as e:
             st.error(f"예상치 못한 오류가 발생했습니다: {e}")
         if stores_data:
-            df = pd.DataFrame(stores_data, columns=['상점명', '카테고리', '주소', '전화번호', '설명'])
+            df = pd.DataFrame(stores_data, columns=['상점명', '카테고리', '주소', '전화번호', '설명', '위도', '경도'])
             st.dataframe(df, use_container_width=True)
+            st.markdown("---")
+            st.subheader("상점 위치 지도")
+            if processed_district == '상인동':
+                map_center = [35.823, 128.535]
+            elif processed_district == '월성동':
+                map_center = [35.835, 128.520]
+            else:
+                map_center = [35.85, 128.6] 
+            m = folium.Map(location=map_center, zoom_start=14)
+            for store in stores_data:
+                lat = store['latitude']
+                lon = store['longitude']
+                name = store['name']
+                category = store['category']
+                address = store['address']
+                phone = store['phone'] if store['phone'] else "정보 없음"
+                description = store['description'] if store['description'] else "정보 없음"
+                popup_html = f"""
+                <b>{name}</b><br>
+                카테고리: {category}<br>
+                주소: {address}<br>
+                전화번호: {phone}<br>
+                설명: {description}
+                """
+                folium.Marker(
+                    [lat, lon],
+                    popup=folium.Popup(popup_html, max_width=300),
+                    tooltip=name
+                ).add_to(m)
+            folium_static(m)
             st.markdown("---")
             st.subheader("상점 상세 정보")
             for store in stores_data:
